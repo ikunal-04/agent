@@ -61,15 +61,35 @@ model ApiRequest {
   frameworkType   FrameworkType?
   languageType    LanguageType?
   
-  generatedApis   GeneratedApi[]
-  databaseSchema  DatabaseSchema?
-  setupCommands   SetupCommand[]
-  
   // Relations
   project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   
+  // Generated content relations
+  generatedFiles GeneratedFile[]
+  generatedApis   GeneratedApi[]
+  databaseSchema  DatabaseSchema?
+  setupCommands   SetupCommand[]
+  dependencies    Dependency[]
+  environmentVariables EnvironmentVariable[]
+  
   @@map("api_requests")
+}
+
+// Generated files content
+model GeneratedFile {
+  id              String    @id @default(cuid())
+  apiRequestId    String
+  filename        String    // e.g., "src/index.ts", "package.json"
+  content         String    // The actual file content
+  fileType        String?   // e.g., "typescript", "json", "markdown"
+  createdAt       DateTime  @default(now())
+  
+  // Relations
+  apiRequest      ApiRequest @relation(fields: [apiRequestId], references: [id], onDelete: Cascade)
+  
+  @@unique([apiRequestId, filename])
+  @@map("generated_files")
 }
 
 // Generated API endpoints
@@ -117,6 +137,39 @@ model SetupCommand {
   apiRequest      ApiRequest @relation(fields: [apiRequestId], references: [id], onDelete: Cascade)
   
   @@map("setup_commands")
+}
+
+// Dependencies (main and dev)
+model Dependency {
+  id              String    @id @default(cuid())
+  apiRequestId    String
+  name            String    // Package name
+  version         String    // Version string
+  type            DependencyType // MAIN or DEV
+  createdAt       DateTime  @default(now())
+  
+  // Relations
+  apiRequest      ApiRequest @relation(fields: [apiRequestId], references: [id], onDelete: Cascade)
+  
+  @@unique([apiRequestId, name, type])
+  @@map("dependencies")
+}
+
+// Environment variables
+model EnvironmentVariable {
+  id              String    @id @default(cuid())
+  apiRequestId    String
+  key             String    // Environment variable key
+  value           String    // Default value (can be empty for secrets)
+  description     String?   // Description of what this env var is for
+  isRequired      Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  
+  // Relations
+  apiRequest      ApiRequest @relation(fields: [apiRequestId], references: [id], onDelete: Cascade)
+  
+  @@unique([apiRequestId, key])
+  @@map("environment_variables")
 }
 
 // Enums
@@ -168,4 +221,9 @@ enum CommandCategory {
   START
   TEST
   DEPLOY
+}
+
+enum DependencyType {
+  MAIN
+  DEV
 }

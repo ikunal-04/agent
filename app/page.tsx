@@ -1,13 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth, SignOutButton } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useUserSync } from "@/hooks/use-user-sync";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   DropdownMenu,
@@ -18,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import Link from "next/link";
+import { toast } from "sonner";
 
 interface GeneratedProject {
   projectId: string;
@@ -52,6 +51,26 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [generatedProject, setGeneratedProject] = useState<GeneratedProject | null>(null);
   const [downloadingProject, setDownloadingProject] = useState<string | null>(null);
+  const [hasExistingProject, setHasExistingProject] = useState(false);
+
+  // Check if user has existing project
+  useEffect(() => {
+    if (isSignedIn && dbUser) {
+      checkExistingProject();
+    }
+  }, [isSignedIn, dbUser]);
+
+  const checkExistingProject = async () => {
+    try {
+      const response = await fetch('/api/projects');
+      if (response.ok) {
+        const data = await response.json();
+        setHasExistingProject(data.projects && data.projects.length > 0);
+      }
+    } catch (error) {
+      console.error('Error checking existing project:', error);
+    }
+  };
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -66,7 +85,7 @@ export default function Home() {
     }
 
     if (!formData.name.trim() || !formData.description.trim()) {
-      alert("Please fill in all required fields");
+      toast("Please fill in all required fields");
       return;
     }
 
@@ -96,13 +115,19 @@ export default function Home() {
 
       if (response.ok) {
         setGeneratedProject(result);
-        alert("Project generated successfully!");
+        toast("Project generated successfully!");
       } else {
-        alert(`Error: ${result.error || 'Failed to generate project'}`);
+        if (result.error === 'Project limit reached') {
+          toast(`You can only create one project per account. Please visit your projects page to view your existing project.`);
+          // Optionally redirect to projects page
+          router.push('/projects');
+        } else {
+          toast(`Error: ${result.error || 'Failed to generate project'}`);
+        }
       }
     } catch (error) {
       console.error('Error generating project:', error);
-      alert('Failed to generate project. Please try again.');
+      toast('Failed to generate project. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -137,10 +162,10 @@ export default function Home() {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
 
-      alert('Download started successfully!');
+      toast('Download started successfully!');
     } catch (error) {
       console.error('Download error:', error);
-      alert(`Download failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      toast(`Download failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setDownloadingProject(null);
     }
@@ -180,10 +205,10 @@ export default function Home() {
       <header className="relative z-10 flex justify-between items-center p-6 text-white">
         <Link href="/">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-pink-500 rounded flex items-center justify-center">
-              <div className="w-4 h-4 bg-white rounded-sm"></div>
+            <div className="w-8 h-8 rounded flex items-center justify-center">
+            <Image src={'/agent.png'} alt="Agent" width={100} height={100}/>
             </div>
-            <span className="font-semibold text-lg">innpae</span>
+            <span className="font-semibold text-lg">Innpae</span>
           </div>
         </Link>
 
@@ -229,107 +254,143 @@ export default function Home() {
 
       <main className="relative z-10 flex flex-col items-center justify-center min-h-[calc(100vh-120px)] px-6">
         <div className="text-center max-w-4xl mx-auto">
-          <div className="mb-8">
-            <div className="w-24 h-24 bg-pink-500 rounded-lg flex items-center justify-center mx-auto mb-4">
-              <div className="w-12 h-12 bg-white rounded-sm"></div>
+          <div className="mb-6">
+            <div className="w-24 h-24 rounded-lg flex items-center justify-center mx-auto">
+            <Image src={'/agent.png'} alt="Agent" width={100} height={100}/>
             </div>
           </div>
 
-          <h1 className="text-6xl font-bold text-white mb-4" style={{ fontFamily: 'var(--font-playfair)' }}>
-            Make Something Beautiful
+          <h1 className="text-4xl font-bold text-white mb-4 italic" style={{ fontFamily: 'var(--font-playfair)' }}>
+            Generate Backend APIs with AI
           </h1>
 
-          <p className="text-xl text-white/90 mb-12 max-w-2xl mx-auto">
-            Build beautiful apps and websites with AI, no code required.
+          <p className="text-xl text-white/90 mb-6 max-w-2xl mx-auto" style={{ fontFamily: 'var(--font-playfair)' }}>
+            Create production-ready backend APIs with Express.js, TypeScript, and your preferred database. No coding required.
           </p>
 
-          <form onSubmit={handleSubmit} className="w-full max-w-3xl mx-auto">
-            <div className="bg-gray-800/80 backdrop-blur-sm rounded-lg p-6 border border-gray-700/50">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <div>
-                  <label className="block text-white text-sm font-medium mb-2">
-                    Project Name
-                  </label>
-                  <Input
+          {hasExistingProject && (
+            <div className="mb-6 p-4 bg-yellow-500/20 border border-yellow-500/50 rounded-lg">
+              <div className="flex items-center gap-2 text-yellow-300">
+                <span className="text-lg">⚠️</span>
+                <span className="font-medium">You already have a project!</span>
+              </div>
+              <p className="text-yellow-200/80 text-sm mt-1">
+                You can only create one project per account. Visit your projects page to view or download your existing project.
+              </p>
+              <Link href="/projects" className="inline-block mt-2 text-yellow-300 hover:text-yellow-200 underline text-sm">
+                View My Projects →
+              </Link>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="w-full max-w-4xl mx-auto">
+            <div className="relative">
+              {/* Main Input Bar */}
+              <div className="bg-gray-800/90 backdrop-blur-sm rounded-full border border-gray-700/50 p-4 flex items-center gap-4">              
+                {/* Project Name Input */}
+                <div className="flex-1">
+                  <input
                     type="text"
-                    placeholder="Enter project name"
+                    placeholder="Project name..."
                     value={formData.name}
                     onChange={(e) => handleInputChange('name', e.target.value)}
-                    className="bg-gray-700/50 border-gray-600 text-white placeholder:text-gray-400"
+                    className="w-full bg-transparent text-white placeholder:text-gray-400 text-sm border-none outline-none"
                     required
                   />
                 </div>
 
-                <div>
-                  <label className="block text-white text-sm font-medium mb-2">
-                    Database
-                  </label>
-                  <Select value={formData.database} onValueChange={(value) => handleInputChange('database', value)}>
-                    <SelectTrigger className="bg-gray-700/50 border-gray-600 text-white">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-gray-800 border-gray-600">
-                      <SelectItem value="postgresql">PostgreSQL</SelectItem>
-                      <SelectItem value="mongodb">MongoDB</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <div>
-                  <label className="block text-white text-sm font-medium mb-2">
-                    ORM
-                  </label>
-                  <Select value={formData.orm} onValueChange={(value) => handleInputChange('orm', value)}>
-                    <SelectTrigger className="bg-gray-700/50 border-gray-600 text-white">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-gray-800 border-gray-600">
-                      <SelectItem value="prisma">Prisma</SelectItem>
-                      <SelectItem value="drizzle">Drizzle</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              {/* Description Input */}
+              <div className="mt-4 bg-gray-800/90 backdrop-blur-sm rounded-2xl border border-gray-700/50 p-4">
+                <textarea
+                  placeholder="Describe your backend API idea... (e.g., Create a REST API for a blog with user authentication, post management, and comments...)"
+                  value={formData.description}
+                  onKeyDown={handleKeyDown}
+                  onChange={(e) => handleInputChange('description', e.target.value)}
+                  className="w-full bg-transparent text-white placeholder:text-gray-400 text-sm border-none outline-none resize-none min-h-[80px]"
+                  required
+                />
+                
+                {/* Bottom Controls */}
+                <div className="flex justify-between items-center mt-3">
+                  {/* Left Side - Database and ORM Selectors */}
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-white/60 text-sm">DB:</span>
+                      <Select value={formData.database} onValueChange={(value) => handleInputChange('database', value)}>
+                        <SelectTrigger className="bg-transparent border-none text-white text-sm p-1 h-auto">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-gray-800 border-gray-600">
+                          <SelectItem value="postgresql">PostgreSQL</SelectItem>
+                          <SelectItem value="mongodb">MongoDB</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
 
-                <div className="flex items-end">
+                    <div className="flex items-center gap-2">
+                      <span className="text-white/60 text-sm">ORM:</span>
+                      <Select value={formData.orm} onValueChange={(value) => handleInputChange('orm', value)}>
+                        <SelectTrigger className="bg-transparent border-none text-white text-sm p-1 h-auto">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-gray-800 border-gray-600">
+                          <SelectItem value="prisma">Prisma</SelectItem>
+                          <SelectItem value="drizzle">Drizzle</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Right Side - Generate Button */}
                   <Button
                     type="submit"
-                    disabled={isLoading}
-                    className="w-full bg-pink-500 hover:bg-pink-600 text-white font-medium py-2 px-4 rounded-md transition-colors disabled:opacity-50"
+                    disabled={isLoading || hasExistingProject}
+                    className="bg-pink-500 hover:bg-pink-600 text-white font-medium py-2 px-6 rounded-full transition-colors disabled:opacity-50 flex items-center gap-2"
                   >
                     {isLoading ? (
-                      <div className="flex items-center gap-2">
+                      <>
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                         Generating...
-                      </div>
+                      </>
+                    ) : hasExistingProject ? (
+                      <>
+                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                        </svg>
+                        Project Limit Reached
+                      </>
                     ) : (
-                      <div className="flex items-center gap-2">
+                      <>
+                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                        </svg>
                         Generate Project
-                      </div>
+                      </>
                     )}
                   </Button>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-white text-sm font-medium mb-2">
-                  Describe your project idea
-                </label>
-                <div className="flex-grow">
-                  <Textarea
-                    placeholder="Make me a landing page for a SaaS product that helps developers manage their projects..."
-                    value={formData.description}
-                    onKeyDown={handleKeyDown}
-                    onChange={(e) => handleInputChange('description', e.target.value)}
-                    className="bg-gray-700/50 border-gray-600 text-white placeholder:text-gray-400 min-h-24 resize-none"
-                    required
-                  />
                 </div>
               </div>
             </div>
           </form>
         </div>
       </main>
+
+      <footer className="relative z-10 flex justify-center items-center text-white/70">
+        <p className="text-sm">
+          Created by{' '}
+          <a 
+            href="https://twitter.com/macdev_0" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-pink-400 hover:text-pink-300 transition-colors underline"
+          >
+            @macdev_0
+          </a>
+        </p>
+      </footer>
 
       {generatedProject && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-6 z-50">

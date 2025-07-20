@@ -5,6 +5,8 @@ import { Playfair_Display } from "next/font/google";
 import "./globals.css";
 import { dark } from "@clerk/themes";
 import { ThemeProvider } from "@/components/theme-provider"
+import { Analytics } from "@vercel/analytics/react";
+import { Toaster } from "@/components/ui/sonner";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -50,6 +52,8 @@ export default function RootLayout({
           >
             {children}
           </ThemeProvider>
+          <Analytics />
+          <Toaster />
         </body>
       </html>
     </ClerkProvider>

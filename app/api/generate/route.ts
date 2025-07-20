@@ -83,6 +83,22 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Check if user already has a project
+    const existingProject = await prisma.project.findFirst({
+      where: { userId: dbUser.id }
+    });
+
+    if (existingProject) {
+      return NextResponse.json(
+        { 
+          error: 'Project limit reached',
+          message: 'You can only create one project per account. Please use your existing project or contact support for assistance.',
+          existingProjectId: existingProject.id
+        },
+        { status: 400 }
+      );
+    }
+
     // Create project
     const project = await prisma.project.create({
       data: {
@@ -121,6 +137,61 @@ export async function POST(request: NextRequest) {
       const generatedProject = await generateBackendProject(config);
       
       console.log(`✅ Project generated successfully with ${Object.keys(generatedProject.files).length} files`);
+
+      // Store all generated files
+      for (const [filename, content] of Object.entries(generatedProject.files)) {
+        // Ensure content is always a string
+        const stringContent = typeof content === 'string' 
+          ? content 
+          : JSON.stringify(content, null, 2);
+          
+        await prisma.generatedFile.create({
+          data: {
+            apiRequestId: apiRequest.id,
+            filename,
+            content: stringContent,
+            fileType: filename.split('.').pop() || null,
+          }
+        });
+      }
+
+      // Store dependencies
+      for (const dep of generatedProject.dependencies.main) {
+        const [name, version] = dep.split('@');
+        await prisma.dependency.create({
+          data: {
+            apiRequestId: apiRequest.id,
+            name: name || dep,
+            version: version || 'latest',
+            type: 'MAIN',
+          }
+        });
+      }
+
+      for (const dep of generatedProject.dependencies.dev) {
+        const [name, version] = dep.split('@');
+        await prisma.dependency.create({
+          data: {
+            apiRequestId: apiRequest.id,
+            name: name || dep,
+            version: version || 'latest',
+            type: 'DEV',
+          }
+        });
+      }
+
+      // Store environment variables
+      for (const [key, value] of Object.entries(generatedProject.environmentVariables)) {
+        await prisma.environmentVariable.create({
+          data: {
+            apiRequestId: apiRequest.id,
+            key,
+            value: value as string,
+            description: `Environment variable for ${key}`,
+            isRequired: true,
+          }
+        });
+      }
 
       // Create database schema record
       await prisma.databaseSchema.create({
@@ -253,11 +324,14 @@ export async function GET(request: NextRequest) {
       include: {
         apiRequests: {
           include: {
+            generatedFiles: true,
             generatedApis: true,
             databaseSchema: true,
             setupCommands: {
               orderBy: { order: 'asc' }
-            }
+            },
+            dependencies: true,
+            environmentVariables: true
           }
         }
       }

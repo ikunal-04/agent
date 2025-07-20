@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import Link from "next/link";
+import { toast } from "sonner";
 
 interface Project {
   id: string;
@@ -24,6 +25,24 @@ interface Project {
   status: 'PENDING' | 'COMPLETED' | 'FAILED';
 }
 
+interface GeneratedProject {
+  projectId: string;
+  apiRequestId: string;
+  message: string;
+  stats: {
+    filesGenerated: number;
+    setupCommands: number;
+    dependencies: number;
+  };
+  files: Record<string, string>;
+  setupCommands: string[];
+  dependencies: {
+    main: string[];
+    dev: string[];
+  };
+  environmentVariables: Record<string, string>;
+}
+
 export default function ProjectsPage() {
   const { isSignedIn, isLoaded } = useAuth();
   const { dbUser } = useUserSync()
@@ -31,6 +50,7 @@ export default function ProjectsPage() {
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [downloadingProject, setDownloadingProject] = useState<string | null>(null);
+  const [selectedProject, setSelectedProject] = useState<GeneratedProject | null>(null);
 
   useEffect(() => {
     if (isSignedIn && dbUser) {
@@ -84,18 +104,63 @@ export default function ProjectsPage() {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
       
-      alert('Download started successfully!');
+      toast('Download started successfully!');
     } catch (error) {
       console.error('Download error:', error);
-      alert(`Download failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      toast(`Download failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setDownloadingProject(null);
     }
   };
 
-  const handleViewProject = (project: Project) => {
-    // For now, we'll show a simple alert. You can expand this to show project details
-    alert(`Viewing project: ${project.name}\nStatus: ${project.status}\nCreated: ${new Date(project.createdAt).toLocaleDateString()}`);
+  const handleViewProject = async (project: Project) => {
+    try {
+      // Fetch project details from the API
+      const response = await fetch(`/api/projects/${project.id}/details`);
+      if (response.ok) {
+        const data = await response.json();
+        setSelectedProject(data);
+      } else {
+        // If no detailed data available, create a basic project object
+        setSelectedProject({
+          projectId: project.id,
+          apiRequestId: '',
+          message: 'Project details loaded',
+          stats: {
+            filesGenerated: 0,
+            setupCommands: 0,
+            dependencies: 0,
+          },
+          files: {},
+          setupCommands: [],
+          dependencies: {
+            main: [],
+            dev: [],
+          },
+          environmentVariables: {},
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching project details:', error);
+      // Show basic project info if API fails
+      setSelectedProject({
+        projectId: project.id,
+        apiRequestId: '',
+        message: 'Project details loaded',
+        stats: {
+          filesGenerated: 0,
+          setupCommands: 0,
+          dependencies: 0,
+        },
+        files: {},
+        setupCommands: [],
+        dependencies: {
+          main: [],
+          dev: [],
+        },
+        environmentVariables: {},
+      });
+    }
   };
 
   if (!isLoaded) {
@@ -130,10 +195,10 @@ export default function ProjectsPage() {
       <header className="relative z-10 flex justify-between items-center p-6 text-white">
         <Link href="/">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-pink-500 rounded flex items-center justify-center">
-              <div className="w-4 h-4 bg-white rounded-sm"></div>
+            <div className="w-8 h-8 rounded flex items-center justify-center">
+              <Image src={'/agent.png'} alt="Agent" width={100} height={100}/>
             </div>
-            <span className="font-semibold text-lg">innpae</span>
+            <span className="font-semibold text-lg">Innpae</span>
           </div>
         </Link>
 
@@ -249,6 +314,113 @@ export default function ProjectsPage() {
           )}
         </div>
       </main>
+
+      {selectedProject && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-6 z-50">
+          <div className="bg-gray-900 rounded-lg p-6 max-w-4xl w-full max-h-[80vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-2xl font-bold text-white">Project Details</h2>
+              <div className="flex gap-2">
+                <Button 
+                  onClick={() => setSelectedProject(null)}
+                  variant="outline"
+                  className="bg-gray-700/50 hover:bg-gray-600/50 text-white"
+                >
+                  Close
+                </Button>
+                <Button 
+                  onClick={() => handleDownload(selectedProject.projectId)}
+                  disabled={downloadingProject === selectedProject.projectId}
+                  className="bg-pink-500 hover:bg-pink-600 text-white"
+                >
+                  {downloadingProject === selectedProject.projectId ? 'Downloading...' : 'Download Project'}
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="bg-gray-800 p-4 rounded">
+                <h3 className="text-white font-semibold mb-2">Project Details</h3>
+                <p className="text-gray-300">ID: {selectedProject.projectId}</p>
+                <p className="text-gray-300">Files Generated: {selectedProject.stats?.filesGenerated}</p>
+                <p className="text-gray-300">Setup Commands: {selectedProject.stats?.setupCommands}</p>
+                <p className="text-gray-300">Dependencies: {selectedProject.stats?.dependencies}</p>
+              </div>
+
+              {selectedProject.setupCommands && selectedProject.setupCommands.length > 0 && (
+                <div className="bg-gray-800 p-4 rounded">
+                  <h3 className="text-white font-semibold mb-2">Setup Commands</h3>
+                  <div className="space-y-2">
+                    {selectedProject.setupCommands.map((cmd: string, index: number) => (
+                      <div key={index} className="bg-gray-700 p-2 rounded">
+                        <code className="text-green-400">{cmd}</code>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {selectedProject.files && Object.keys(selectedProject.files).length > 0 && (
+                <div className="bg-gray-800 p-4 rounded">
+                  <h3 className="text-white font-semibold mb-2">Generated Files</h3>
+                  <div className="grid grid-cols-2 gap-2">
+                    {Object.keys(selectedProject.files).map((filename) => (
+                      <div key={filename} className="bg-gray-700 p-2 rounded text-sm">
+                        <span className="text-blue-400">{filename}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {selectedProject.dependencies && (selectedProject.dependencies.main.length > 0 || selectedProject.dependencies.dev.length > 0) && (
+                <div className="bg-gray-800 p-4 rounded">
+                  <h3 className="text-white font-semibold mb-2">Dependencies</h3>
+                  {selectedProject.dependencies.main.length > 0 && (
+                    <div className="mb-3">
+                      <h4 className="text-white/80 text-sm font-medium mb-2">Main Dependencies:</h4>
+                      <div className="space-y-1">
+                        {selectedProject.dependencies.main.map((dep: string, index: number) => (
+                          <div key={index} className="bg-gray-700 p-2 rounded text-sm">
+                            <code className="text-yellow-400">{dep}</code>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {selectedProject.dependencies.dev.length > 0 && (
+                    <div>
+                      <h4 className="text-white/80 text-sm font-medium mb-2">Dev Dependencies:</h4>
+                      <div className="space-y-1">
+                        {selectedProject.dependencies.dev.map((dep: string, index: number) => (
+                          <div key={index} className="bg-gray-700 p-2 rounded text-sm">
+                            <code className="text-cyan-400">{dep}</code>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {selectedProject.environmentVariables && Object.keys(selectedProject.environmentVariables).length > 0 && (
+                <div className="bg-gray-800 p-4 rounded">
+                  <h3 className="text-white font-semibold mb-2">Environment Variables</h3>
+                  <div className="space-y-2">
+                    {Object.entries(selectedProject.environmentVariables).map(([key, value]) => (
+                      <div key={key} className="bg-gray-700 p-2 rounded text-sm">
+                        <span className="text-purple-400">{key}</span>
+                        <span className="text-gray-400"> = </span>
+                        <span className="text-green-400">{value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 

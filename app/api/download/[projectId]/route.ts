@@ -33,11 +33,14 @@ export async function GET(
       include: {
         apiRequests: {
           include: {
+            generatedFiles: true,
             generatedApis: true,
             databaseSchema: true,
             setupCommands: {
               orderBy: { order: 'asc' }
-            }
+            },
+            dependencies: true,
+            environmentVariables: true
           }
         }
       }
@@ -65,35 +68,17 @@ export async function GET(
     // Create ZIP file
     const zip = new JSZip();
     
-    // Parse the generated files from the database
-    let generatedFiles: Record<string, string> = {};
-    
-    if (apiRequest.generatedApis.length > 0) {
+    // Get generated files from the database
+    apiRequest.generatedFiles.forEach((file) => {
       try {
-        // Try to parse the code from the first generated API
-        const codeData = JSON.parse(apiRequest.generatedApis[0].code);
-        if (typeof codeData === 'object') {
-          generatedFiles = codeData;
-        }
-      } catch (error) {
-        console.warn('Could not parse generated files from database');
-      }
-    }
-
-    Object.entries(generatedFiles).forEach(([filepath, content]) => {
-      try {
-        if (content === null || content === undefined) {
-          console.warn(`Skipping file ${filepath} - content is null or undefined`);
+        if (file.content === null || file.content === undefined) {
+          console.warn(`Skipping file ${file.filename} - content is null or undefined`);
           return;
         }
         
-        const stringContent = typeof content === 'string' 
-          ? content 
-          : JSON.stringify(content, null, 2);
-        
-        zip.file(filepath, stringContent);
+        zip.file(file.filename, file.content);
       } catch (error) {
-        console.error(`Error adding file ${filepath} to ZIP:`, error);
+        console.error(`Error adding file ${file.filename} to ZIP:`, error);
       }
     });
 
