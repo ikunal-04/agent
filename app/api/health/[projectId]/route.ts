@@ -6,20 +6,18 @@ import { auth } from '@clerk/nextjs/server';
 import { spawn } from 'child_process';
 import fs from 'fs/promises';
 import path from 'path';
-
-// Store running processes
 const runningProjects = new Map<string, any>();
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { projectId: string } }
+  { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
-    const { projectId } = params;
+    const { projectId } = await params;
     
     console.log(`🏥 Health check requested for project: ${projectId}`);
 
-    // Get authenticated user
+  
     const { userId } = await auth();
     
     if (!userId) {
@@ -29,7 +27,7 @@ export async function POST(
       );
     }
 
-    // Get project from database
+  
     const project = await prisma.project.findFirst({
       where: {
         id: projectId,
@@ -55,7 +53,7 @@ export async function POST(
       );
     }
 
-    // Get the latest API request
+  
     const apiRequest = project.apiRequests[0];
     
     if (!apiRequest || apiRequest.status !== 'COMPLETED') {
@@ -65,7 +63,7 @@ export async function POST(
       );
     }
 
-    // Parse generated files from database
+  
     let generatedFiles: Record<string, string> = {};
     
     if (apiRequest.generatedApis.length > 0) {
@@ -83,38 +81,38 @@ export async function POST(
       }
     }
 
-    // Create temporary directory for the project
+  
     const tempDir = path.join(process.cwd(), 'temp-projects', projectId);
     
     try {
-      // Clean up any existing temp directory
+    
       try {
         await fs.rm(tempDir, { recursive: true, force: true });
       } catch (e) {
-        // Directory might not exist, ignore
+      
       }
       
       await fs.mkdir(tempDir, { recursive: true });
       
       console.log(`📁 Created temp directory: ${tempDir}`);
 
-      // Write all project files to temp directory
+    
       await Promise.all(
         Object.entries(generatedFiles).map(async ([filepath, content]) => {
           const fullPath = path.join(tempDir, filepath);
           const dir = path.dirname(fullPath);
           
-          // Create directory if it doesn't exist
+        
           await fs.mkdir(dir, { recursive: true });
           
-          // Write file content
+        
           await fs.writeFile(fullPath, content as string, 'utf8');
         })
       );
 
       console.log(`✍️ Written ${Object.keys(generatedFiles).length} files to temp directory`);
 
-      // Create package.json if it doesn't exist or update it
+    
       const packageJsonPath = path.join(tempDir, 'package.json');
       let packageJson: any;
       
@@ -122,7 +120,7 @@ export async function POST(
         const packageContent = await fs.readFile(packageJsonPath, 'utf8');
         packageJson = JSON.parse(packageContent);
       } catch (e) {
-        // Create basic package.json if it doesn't exist
+      
         packageJson = {
           name: project.name.toLowerCase().replace(/\s+/g, '-'),
           version: '1.0.0',
@@ -134,7 +132,7 @@ export async function POST(
         };
       }
 
-      // Add necessary scripts
+    
       packageJson.scripts = {
         ...packageJson.scripts,
         "build": "tsc",
@@ -143,12 +141,12 @@ export async function POST(
         "test": "echo \"No tests specified\" && exit 0"
       };
 
-      // Write updated package.json
+    
       await fs.writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2));
 
       console.log('📦 Updated package.json with scripts');
 
-      // Install dependencies
+    
       console.log('📦 Installing dependencies...');
       const installResult = await runCommand('npm', ['install'], tempDir);
       
@@ -161,7 +159,7 @@ export async function POST(
         }, { status: 500 });
       }
 
-      // Run setup commands from database
+    
       for (const setupCmd of apiRequest.setupCommands) {
         console.log(`🔧 Running setup command: ${setupCmd.command}`);
         
@@ -170,11 +168,11 @@ export async function POST(
         
         if (!setupResult.success) {
           console.warn(`⚠️ Setup command failed: ${setupCmd.command}`);
-          // Continue anyway, some setup commands might not be critical
+        
         }
       }
 
-      // Build the project
+    
       console.log('🏗️ Building project...');
       const buildResult = await runCommand('npm', ['run', 'build'], tempDir);
       
@@ -187,7 +185,7 @@ export async function POST(
         }, { status: 500 });
       }
 
-      // Start the server on a random port
+    
       const port = Math.floor(Math.random() * (9999 - 3001) + 3001);
       console.log(`🚀 Starting server on port ${port}...`);
 
@@ -202,11 +200,11 @@ export async function POST(
         }, { status: 500 });
       }
 
-      // Test health endpoint
+    
       console.log(`🏥 Testing health endpoint...`);
       const healthResult = await testHealthEndpoint(`http://localhost:${port}/api/health`);
 
-      // Store running project info
+    
       runningProjects.set(projectId, {
         port,
         process: serverResult.process,
@@ -214,7 +212,7 @@ export async function POST(
         startedAt: new Date().toISOString(),
       });
 
-      // Clean up temp directory after a delay (optional)
+    
       setTimeout(async () => {
         try {
           const runningProject = runningProjects.get(projectId);
@@ -227,7 +225,7 @@ export async function POST(
         } catch (e) {
           console.warn(`⚠️ Failed to cleanup temp directory: ${e}`);
         }
-      }, 300000); // 5 minutes
+      }, 300000);
 
       return NextResponse.json({
         success: true,
@@ -242,11 +240,11 @@ export async function POST(
       });
 
     } catch (error) {
-      // Clean up temp directory on error
+    
       try {
         await fs.rm(tempDir, { recursive: true, force: true });
       } catch (e) {
-        // Ignore cleanup errors
+      
       }
       
       throw error;
@@ -263,15 +261,14 @@ export async function POST(
   }
 }
 
-// GET endpoint to check if a project is currently running
 export async function GET(
   request: NextRequest,
-  { params }: { params: { projectId: string } }
+  { params }: { params: Promise<{ projectId: string }> }
 ) {
   try {
-    const { projectId } = params;
+    const { projectId } = await params;
     
-    // Get authenticated user
+  
     const { userId } = await auth();
     
     if (!userId) {
@@ -290,7 +287,7 @@ export async function GET(
       });
     }
 
-    // Test if the server is still responsive
+  
     const healthResult = await testHealthEndpoint(`http://localhost:${runningProject.port}/api/health`);
 
     return NextResponse.json({
@@ -314,7 +311,6 @@ export async function GET(
   }
 }
 
-// Helper function to run commands
 async function runCommand(command: string, args: string[], cwd: string): Promise<{success: boolean, output?: string, error?: string}> {
   return new Promise((resolve) => {
     const process = spawn(command, args, {
@@ -348,10 +344,9 @@ async function runCommand(command: string, args: string[], cwd: string): Promise
   });
 }
 
-// Helper function to start the server
 async function startServer(cwd: string, port: number, projectId: string): Promise<{success: boolean, process?: any, error?: string}> {
   return new Promise((resolve) => {
-    // Set PORT environment variable
+  
     const env = { ...process.env, PORT: port.toString() };
     
     const serverProcess = spawn('npm', ['start'], {
@@ -366,7 +361,7 @@ async function startServer(cwd: string, port: number, projectId: string): Promis
 
     serverProcess.stdout?.on('data', (data: Buffer) => {
       output += data.toString();
-      // Check if server started successfully
+    
       if (output.includes('Server running') || output.includes('Listening on port') || output.includes('started')) {
         resolve({ success: true, process: serverProcess });
       }
@@ -376,7 +371,7 @@ async function startServer(cwd: string, port: number, projectId: string): Promis
       error += data.toString();
     });
 
-    // Timeout after 30 seconds
+  
     setTimeout(() => {
       if (!serverProcess.killed) {
         serverProcess.kill();
@@ -396,7 +391,6 @@ async function startServer(cwd: string, port: number, projectId: string): Promis
   });
 }
 
-// Helper function to test health endpoint
 async function testHealthEndpoint(url: string): Promise<{success: boolean, response?: any, error?: string}> {
   try {
     const response = await fetch(url, {
