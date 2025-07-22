@@ -191,7 +191,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen relative overflow-hidden">
-      <div className="absolute inset-0 z-0">
+      <div className="absolute inset-0 z-0" >
         <Image
           src="/new-bg.jpg"
           alt="Background"
