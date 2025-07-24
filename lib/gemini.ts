@@ -19,7 +19,7 @@ export class GeminiCodeGenerator {
             const prompt = await this.getPromptForTechStack(config);
             
             const result = await this.client.models.generateContent({
-                model: 'gemini-2.5-flash',
+                model: 'gemini-2.5-pro',
                 contents: prompt,
                 config: {
                     tools: [groundingTool]
