@@ -7,6 +7,7 @@ import { dark } from "@clerk/themes";
 import { ThemeProvider } from "@/components/theme-provider"
 import { Analytics } from "@vercel/analytics/react";
 import { Toaster } from "@/components/ui/sonner";
+import { siteConfig } from "@/config/site-config";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -23,10 +24,7 @@ const playfair = Playfair_Display({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "innpae - Make Something Beautiful",
-  description: "Build beautiful apps and websites with AI, no code required.",
-};
+export const metadata: Metadata = siteConfig;
 
 export default function RootLayout({
   children,
